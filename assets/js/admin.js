@@ -378,13 +378,13 @@ jQuery(document).ready(function($) {
             // Calculate the sum of remaining amounts for this bill
             var billRemainingTotal = 0;
             if (bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0) {
-                var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
-                itemsArray.forEach(function(item, itemIndex) {
-                    // Use the original index from the backend if available, otherwise fall back to frontend index
-                    var originalIndex = typeof item.original_index !== 'undefined' ? item.original_index : itemIndex;
+                var itemsObject = bill.items;
+                Object.keys(itemsObject).forEach(function(originalIndex) {
+                    var item = itemsObject[originalIndex];
+                    var realOriginalIndex = parseInt(originalIndex);
                     
                     var itemPaid = 0;
-                    var itemPaymentKey = item.season_id + '_' + originalIndex;
+                    var itemPaymentKey = item.season_id + '_' + realOriginalIndex;
                     
                     // Check item-specific payments first (new system)
                     if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
@@ -418,18 +418,20 @@ jQuery(document).ready(function($) {
             `;
             
             if (bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0) {
-                // Convert object to array if needed
-                var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
+                // Keep the original object structure to preserve indices
+                var itemsObject = bill.items;
                 
-                itemsArray.forEach(function(item, itemIndex) {
-                    console.log('Processing item:', item);
+                // Iterate over the object to maintain original indices
+                Object.keys(itemsObject).forEach(function(originalIndex) {
+                    var item = itemsObject[originalIndex];
+                    console.log('Processing item at index ' + originalIndex + ':', item);
                     
-                    // Use the original index from the backend if available, otherwise fall back to frontend index
-                    var originalIndex = typeof item.original_index !== 'undefined' ? item.original_index : itemIndex;
+                    // Use the original index from the object key
+                    var realOriginalIndex = parseInt(originalIndex);
                     
                     // Calculate item-specific paid amount
                     var itemPaid = 0;
-                    var itemPaymentKey = item.season_id + '_' + originalIndex;
+                    var itemPaymentKey = item.season_id + '_' + realOriginalIndex;
                     
                     // Check item-specific payments first (new system)
                     if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
@@ -452,14 +454,14 @@ jQuery(document).ready(function($) {
                             <div class="agripump-ledger-item-label">
                                 <button class="edit-season-item-btn agripump-btn agripump-btn-sm agripump-btn-secondary" 
                                         data-bill-id="${bill.bill_id}" 
-                                        data-item-index="${originalIndex}" 
+                                        data-item-index="${realOriginalIndex}" 
                                         data-season-id="${item.season_id}" 
                                         data-season-name="${item.season_name || 'Unknown Season'}" 
                                         data-land="${item.land || '0'}" 
                                         data-amount="${parseFloat(item.amount || 0).toFixed(2)}">Edit</button>
                                 <button class="delete-season-item-btn agripump-btn agripump-btn-sm agripump-btn-danger" 
                                         data-bill-id="${bill.bill_id}" 
-                                        data-item-index="${originalIndex}" 
+                                        data-item-index="${realOriginalIndex}" 
                                         data-season-name="${item.season_name || 'Unknown Season'}">Delete</button>
                             </div>
                         </div>
