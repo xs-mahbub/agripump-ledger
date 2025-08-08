@@ -799,6 +799,33 @@ class AgriPumpLedger {
         }
     }
     
+    private function debug_bill_items($bill_id, $expected_index) {
+        $bill_items = get_post_meta($bill_id, 'bill_items', true);
+        
+        error_log('DEBUG: Bill ID: ' . $bill_id);
+        error_log('DEBUG: Expected index: ' . $expected_index);
+        error_log('DEBUG: Bill items type: ' . gettype($bill_items));
+        error_log('DEBUG: Bill items is_array: ' . (is_array($bill_items) ? 'YES' : 'NO'));
+        
+        if (is_array($bill_items)) {
+            error_log('DEBUG: Bill items count: ' . count($bill_items));
+            error_log('DEBUG: Bill items keys: ' . implode(', ', array_keys($bill_items)));
+            error_log('DEBUG: Bill items structure: ' . print_r($bill_items, true));
+            
+            foreach ($bill_items as $index => $item) {
+                error_log('DEBUG: Item ' . $index . ': ' . print_r($item, true));
+            }
+            
+            if (isset($bill_items[$expected_index])) {
+                error_log('DEBUG: Item at expected index ' . $expected_index . ' EXISTS');
+            } else {
+                error_log('DEBUG: Item at expected index ' . $expected_index . ' NOT FOUND');
+            }
+        } else {
+            error_log('DEBUG: Bill items is not an array');
+        }
+    }
+    
     public function edit_season_ledger() {
         check_ajax_referer('agripump_nonce', 'nonce');
         
@@ -813,13 +840,24 @@ class AgriPumpLedger {
         $new_season_id = intval($_POST['new_season_id']);
         $new_season_name = sanitize_text_field($_POST['new_season_name']);
         
+        // Debug logging
+        error_log('AgriPump Edit Season - Request data: ' . print_r($_POST, true));
+        error_log('AgriPump Edit Season - Bill ID: ' . $bill_id . ', Item Index: ' . $item_index);
+        
         if (empty($bill_id) || $item_index < 0 || $new_amount <= 0 || $new_land < 0) {
             wp_send_json_error(__('Invalid data for editing.', 'agripump-ledger'));
         }
         
+        // Call debug function
+        $this->debug_bill_items($bill_id, $item_index);
+        
         $bill_items = get_post_meta($bill_id, 'bill_items', true);
+        error_log('AgriPump Edit Season - Bill items: ' . print_r($bill_items, true));
+        error_log('AgriPump Edit Season - Bill items count: ' . (is_array($bill_items) ? count($bill_items) : 'N/A'));
+        
         if (!is_array($bill_items) || !isset($bill_items[$item_index])) {
-            wp_send_json_error(__('Item not found in this bill.', 'agripump-ledger'));
+            error_log('AgriPump Edit Season - Item not found. Index: ' . $item_index . ', Available indices: ' . (is_array($bill_items) ? implode(', ', array_keys($bill_items)) : 'N/A'));
+            wp_send_json_error(__('Item not found in this bill. Index: ' . $item_index . ', Available indices: ' . (is_array($bill_items) ? implode(', ', array_keys($bill_items)) : 'N/A'), 'agripump-ledger'));
         }
         
         $season_item = $bill_items[$item_index];
