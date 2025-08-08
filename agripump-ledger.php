@@ -589,7 +589,14 @@ class AgriPumpLedger {
             // Get paid amount for this bill
             $paid_amount = floatval(get_post_meta($bill->ID, 'paid_amount', true));
             
-            // Get season-specific payments
+            // Get item-specific payments
+            $item_payments_key = 'item_payments_' . $bill->ID;
+            $item_payments = get_post_meta($bill->ID, $item_payments_key, true);
+            if (!is_array($item_payments)) {
+                $item_payments = array();
+            }
+            
+            // Also get legacy season payments for backward compatibility
             $season_payments_key = 'season_payments_' . $bill->ID;
             $season_payments = get_post_meta($bill->ID, $season_payments_key, true);
             if (!is_array($season_payments)) {
@@ -602,7 +609,8 @@ class AgriPumpLedger {
                 'items' => $bill_items,
                 'total' => $total_amount,
                 'paid_amount' => $paid_amount,
-                'season_payments' => $season_payments
+                'item_payments' => $item_payments,
+                'season_payments' => $season_payments // Keep for backward compatibility
             );
         }
         
@@ -668,12 +676,13 @@ class AgriPumpLedger {
         $customer_id = intval($_POST['customer_id']);
         $season_id = intval($_POST['season_id']);
         $bill_id = intval($_POST['bill_id']);
+        $item_index = intval($_POST['item_index']);
         $payment_amount = floatval($_POST['payment_amount']);
         $payment_date = sanitize_text_field($_POST['payment_date']);
         $payment_notes = sanitize_textarea_field($_POST['payment_notes']);
         
-        if (empty($customer_id) || empty($season_id) || empty($bill_id) || $payment_amount <= 0) {
-            wp_send_json_error(__('Invalid customer ID, season ID, bill ID, or payment amount.', 'agripump-ledger'));
+        if (empty($customer_id) || empty($season_id) || empty($bill_id) || $payment_amount <= 0 || $item_index < 0) {
+            wp_send_json_error(__('Invalid customer ID, season ID, bill ID, item index, or payment amount.', 'agripump-ledger'));
         }
         
         // Get customer details
@@ -700,38 +709,40 @@ class AgriPumpLedger {
             wp_send_json_error(__('Invalid bill structure.', 'agripump-ledger'));
         }
         
-        // Find the specific season item
-        $season_item = null;
-        foreach ($bill_items as $item) {
-            if (isset($item['season_id']) && intval($item['season_id']) == $season_id) {
-                $season_item = $item;
-                break;
-            }
+        // Find the specific season item by index
+        if (!isset($bill_items[$item_index])) {
+            wp_send_json_error(__('Item not found in this bill.', 'agripump-ledger'));
         }
         
-        if (!$season_item) {
-            wp_send_json_error(__('Season not found in this bill.', 'agripump-ledger'));
+        $season_item = $bill_items[$item_index];
+        
+        // Verify the season_id matches
+        if (!isset($season_item['season_id']) || intval($season_item['season_id']) != $season_id) {
+            wp_send_json_error(__('Season ID mismatch for the selected item.', 'agripump-ledger'));
         }
         
-        // Get season-specific payment tracking
-        $season_payments_key = 'season_payments_' . $bill_id;
-        $season_payments = get_post_meta($bill_id, $season_payments_key, true);
-        if (!is_array($season_payments)) {
-            $season_payments = array();
+        // Get item-specific payment tracking using bill_id, season_id, and item_index
+        $item_payments_key = 'item_payments_' . $bill_id;
+        $item_payments = get_post_meta($bill_id, $item_payments_key, true);
+        if (!is_array($item_payments)) {
+            $item_payments = array();
         }
         
-        // Calculate season-specific remaining amount
-        $season_amount = floatval($season_item['amount']);
-        $season_paid = isset($season_payments[$season_id]) ? floatval($season_payments[$season_id]) : 0;
-        $season_remaining = $season_amount - $season_paid;
+        // Create unique key for this specific item
+        $item_payment_key = $season_id . '_' . $item_index;
         
-        if ($payment_amount > $season_remaining) {
-            wp_send_json_error(__('Payment amount exceeds the remaining amount for this season.', 'agripump-ledger'));
+        // Calculate item-specific remaining amount
+        $item_amount = floatval($season_item['amount']);
+        $item_paid = isset($item_payments[$item_payment_key]) ? floatval($item_payments[$item_payment_key]) : 0;
+        $item_remaining = $item_amount - $item_paid;
+        
+        if ($payment_amount > $item_remaining) {
+            wp_send_json_error(__('Payment amount exceeds the remaining amount for this item.', 'agripump-ledger'));
         }
         
-        // Update season-specific payment
-        $season_payments[$season_id] = $season_paid + $payment_amount;
-        update_post_meta($bill_id, $season_payments_key, $season_payments);
+        // Update item-specific payment
+        $item_payments[$item_payment_key] = $item_paid + $payment_amount;
+        update_post_meta($bill_id, $item_payments_key, $item_payments);
         
         // Update total bill paid amount
         $current_paid_amount = floatval(get_post_meta($bill_id, 'paid_amount', true));
@@ -742,12 +753,12 @@ class AgriPumpLedger {
             array(
                 'bill_id' => $bill_id,
                 'season_id' => $season_id,
+                'item_index' => $item_index,
                 'season_name' => get_post($season_id) ? get_post($season_id)->post_title : 'Unknown Season',
                 'bill_date' => get_post_meta($bill_id, 'bill_date', true),
                 'payment_amount' => $payment_amount,
-                'season_remaining' => $season_remaining - $payment_amount,
-                'bill_remaining' => $total_bill_amount - $new_paid_amount,
-                'season_total_paid' => $season_paid + $payment_amount
+                'item_remaining' => $item_remaining - $payment_amount,
+                'item_total_paid' => $item_paid + $payment_amount
             )
         );
         
@@ -760,6 +771,7 @@ class AgriPumpLedger {
                 'customer_id' => $customer_id,
                 'season_id' => $season_id,
                 'bill_id' => $bill_id,
+                'item_index' => $item_index,
                 'payment_amount' => $payment_amount,
                 'payment_date' => $payment_date,
                 'payment_notes' => $payment_notes,
@@ -785,6 +797,60 @@ class AgriPumpLedger {
     public function activate() {
         // Flush rewrite rules
         flush_rewrite_rules();
+        
+        // Migrate existing season payments to item payments
+        $this->migrate_season_payments_to_item_payments();
+    }
+    
+    /**
+     * Migrate existing season payments to the new item-specific payment system
+     */
+    private function migrate_season_payments_to_item_payments() {
+        $bills = get_posts(array(
+            'post_type' => 'agripump_bill',
+            'numberposts' => -1,
+            'post_status' => 'publish'
+        ));
+        
+        foreach ($bills as $bill) {
+            $season_payments_key = 'season_payments_' . $bill->ID;
+            $season_payments = get_post_meta($bill->ID, $season_payments_key, true);
+            
+            // Skip if no season payments or already migrated
+            if (!is_array($season_payments) || empty($season_payments)) {
+                continue;
+            }
+            
+            $item_payments_key = 'item_payments_' . $bill->ID;
+            $existing_item_payments = get_post_meta($bill->ID, $item_payments_key, true);
+            
+            // Skip if already migrated
+            if (is_array($existing_item_payments) && !empty($existing_item_payments)) {
+                continue;
+            }
+            
+            $bill_items = get_post_meta($bill->ID, 'bill_items', true);
+            if (!is_array($bill_items)) {
+                continue;
+            }
+            
+            $item_payments = array();
+            
+            // For each item in the bill, check if there's a season payment
+            foreach ($bill_items as $index => $item) {
+                if (isset($item['season_id']) && isset($season_payments[$item['season_id']])) {
+                    $item_payment_key = $item['season_id'] . '_' . $index;
+                    // Note: This migration assumes one-to-one mapping, which may not be accurate
+                    // In practice, you might need more sophisticated logic based on your data
+                    $item_payments[$item_payment_key] = $season_payments[$item['season_id']];
+                }
+            }
+            
+            // Save the migrated item payments
+            if (!empty($item_payments)) {
+                update_post_meta($bill->ID, $item_payments_key, $item_payments);
+            }
+        }
     }
     
     public function deactivate() {

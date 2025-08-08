@@ -497,10 +497,28 @@ jQuery(document).ready(function($) {
                     
                     items.forEach(function(item, itemIndex) {
                         console.log('Processing item:', item);
+                        // Calculate paid amount for this specific item
+                        var itemAmount = parseFloat(item.amount || 0);
+                        var itemPaidForDisplay = 0;
+                        var itemPaymentKeyForDisplay = item.season_id + '_' + itemIndex;
+                        
+                        // Check item-specific payments first (new system)
+                        if (bill.item_payments && bill.item_payments[itemPaymentKeyForDisplay]) {
+                            itemPaidForDisplay = parseFloat(bill.item_payments[itemPaymentKeyForDisplay]);
+                        }
+                        // Fallback to season payments for backward compatibility (old system)
+                        else if (bill.season_payments && bill.season_payments[item.season_id]) {
+                            itemPaidForDisplay = parseFloat(bill.season_payments[item.season_id]);
+                        }
+                        
+                        var itemRemainingForDisplay = itemAmount - itemPaidForDisplay;
+                        
                         itemsHtml += '<div class="bill-item">';
                         itemsHtml += '<strong>' + (item.season_name || 'Unknown Season') + '</strong>';
                         itemsHtml += ' - Land: ' + (item.land || 0) + ' shotok';
-                        itemsHtml += ' - Amount: ৳' + parseFloat(item.amount || 0).toFixed(2);
+                        itemsHtml += ' - Amount: ৳' + itemAmount.toFixed(2);
+                        itemsHtml += ' - Paid: ৳' + itemPaidForDisplay.toFixed(2);
+                        itemsHtml += ' - Remaining: ৳' + itemRemainingForDisplay.toFixed(2);
                         itemsHtml += '</div>';
                         
                         // Collect season options for payment dropdown
@@ -508,12 +526,20 @@ jQuery(document).ready(function($) {
                         var seasonKey = item.season_id + '_' + bill.bill_id + '_' + itemIndex;
                         var seasonAmount = parseFloat(item.amount || 0);
                         
-                        // Calculate season-specific remaining amount
-                        var seasonPaid = 0;
-                        if (bill.season_payments && bill.season_payments[item.season_id]) {
-                            seasonPaid = parseFloat(bill.season_payments[item.season_id]);
+                        // Calculate item-specific remaining amount
+                        var itemPaid = 0;
+                        var itemPaymentKey = item.season_id + '_' + itemIndex;
+                        
+                        // Check item-specific payments first (new system)
+                        if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
+                            itemPaid = parseFloat(bill.item_payments[itemPaymentKey]);
                         }
-                        var seasonRemaining = seasonAmount - seasonPaid;
+                        // Fallback to season payments for backward compatibility (old system)
+                        else if (bill.season_payments && bill.season_payments[item.season_id]) {
+                            itemPaid = parseFloat(bill.season_payments[item.season_id]);
+                        }
+                        
+                        var seasonRemaining = seasonAmount - itemPaid;
                         
                         if (seasonRemaining > 0) {
                             seasonOptions[seasonKey] = {
@@ -560,8 +586,8 @@ jQuery(document).ready(function($) {
         
         Object.keys(seasonOptions).forEach(function(key) {
             var option = seasonOptions[key];
-            seasonSelect.append('<option value="' + key + '" data-remaining="' + option.remaining_amount + '">' + 
-                option.season_name + ' - ৳' + option.remaining_amount.toFixed(2) + ' remaining</option>');
+            var displayText = option.season_name + ' - Land: ' + option.land + ' shotok - ৳' + option.remaining_amount.toFixed(2) + ' remaining';
+            seasonSelect.append('<option value="' + key + '" data-remaining="' + option.remaining_amount + '">' + displayText + '</option>');
         });
         
         // Store season options globally
@@ -614,6 +640,7 @@ jQuery(document).ready(function($) {
                 customer_id: currentCustomerId,
                 season_id: seasonOption.season_id,
                 bill_id: seasonOption.bill_id,
+                item_index: seasonOption.item_index,
                 payment_amount: paymentAmount,
                 payment_date: paymentDate,
                 payment_notes: paymentNotes,
