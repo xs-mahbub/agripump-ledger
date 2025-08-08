@@ -410,6 +410,7 @@ jQuery(document).ready(function($) {
                             <div class="agripump-ledger-header-cell">${agripump_ajax.strings.due_amount || 'Due Amount'}</div>
                             <div class="agripump-ledger-header-cell">Paid Amount</div>
                             <div class="agripump-ledger-header-cell">Remaining</div>
+                            <div class="agripump-ledger-header-cell">Actions</div>
                         </div>
             `;
             
@@ -442,6 +443,19 @@ jQuery(document).ready(function($) {
                             <div class="agripump-ledger-item-label">${parseFloat(item.amount || 0).toFixed(2)}</div>
                             <div class="agripump-ledger-item-label">${itemPaid.toFixed(2)}</div>
                             <div class="agripump-ledger-item-label">${itemRemaining.toFixed(2)}</div>
+                            <div class="agripump-ledger-item-label">
+                                <button class="edit-season-item-btn agripump-btn agripump-btn-sm agripump-btn-secondary" 
+                                        data-bill-id="${bill.bill_id}" 
+                                        data-item-index="${itemIndex}" 
+                                        data-season-id="${item.season_id}" 
+                                        data-season-name="${item.season_name || 'Unknown Season'}" 
+                                        data-land="${item.land || '0'}" 
+                                        data-amount="${parseFloat(item.amount || 0).toFixed(2)}">Edit</button>
+                                <button class="delete-season-item-btn agripump-btn agripump-btn-sm agripump-btn-danger" 
+                                        data-bill-id="${bill.bill_id}" 
+                                        data-item-index="${itemIndex}" 
+                                        data-season-name="${item.season_name || 'Unknown Season'}">Delete</button>
+                            </div>
                         </div>
                     `;
                 });
@@ -589,5 +603,154 @@ jQuery(document).ready(function($) {
         var form = $(this).closest('form');
         form[0].reset();
         form.find('input[type="hidden"]').val('');
+    });
+    
+    // Edit season ledger item
+    $(document).on('click', '.edit-season-item-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var billId = button.data('bill-id');
+        var itemIndex = button.data('item-index');
+        var seasonId = button.data('season-id');
+        var seasonName = button.data('season-name');
+        var land = button.data('land');
+        var amount = button.data('amount');
+        
+        // Create edit modal
+        var modalHtml = `
+            <div id="edit-season-modal" class="agripump-modal">
+                <div class="agripump-modal-content">
+                    <div class="agripump-modal-header">
+                        <h2>Edit Season Item</h2>
+                        <span class="agripump-modal-close">&times;</span>
+                    </div>
+                    <div class="agripump-modal-body">
+                        <form id="edit-season-form">
+                            <div class="agripump-form-group">
+                                <label for="edit-season-name">Season Name</label>
+                                <input type="text" id="edit-season-name" class="agripump-form-control" value="${seasonName}" readonly>
+                            </div>
+                            <div class="agripump-form-group">
+                                <label for="edit-land-amount">Land Amount *</label>
+                                <input type="number" id="edit-land-amount" class="agripump-form-control" step="0.01" min="0" value="${land}" required>
+                            </div>
+                            <div class="agripump-form-group">
+                                <label for="edit-due-amount">Due Amount *</label>
+                                <input type="number" id="edit-due-amount" class="agripump-form-control" step="0.01" min="0" value="${amount}" required>
+                            </div>
+                            <div class="agripump-form-actions">
+                                <button type="submit" class="agripump-btn agripump-btn-primary">Update</button>
+                                <button type="button" class="agripump-btn agripump-btn-secondary cancel-edit">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        $('#edit-season-modal').remove();
+        
+        // Add modal to page
+        $('body').append(modalHtml);
+        $('#edit-season-modal').show();
+        
+        // Handle form submission
+        $('#edit-season-form').on('submit', function(e) {
+            e.preventDefault();
+            var newLand = parseFloat($('#edit-land-amount').val()) || 0;
+            var newAmount = parseFloat($('#edit-due-amount').val()) || 0;
+            
+            if (newLand < 0 || newAmount <= 0) {
+                alert('Please enter valid values for land and due amount.');
+                return;
+            }
+            
+            // Show loading
+            $('#edit-season-form button[type="submit"]').prop('disabled', true).text('Updating...');
+            
+            $.ajax({
+                url: agripump_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'agripump_edit_season_ledger',
+                    nonce: agripump_ajax.nonce,
+                    bill_id: billId,
+                    item_index: itemIndex,
+                    new_amount: newAmount,
+                    new_land: newLand,
+                    new_season_id: seasonId,
+                    new_season_name: seasonName
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert('Season item updated successfully!');
+                        $('#edit-season-modal').remove();
+                        loadCustomerLedger(); // Reload ledger
+                    } else {
+                        alert('Error updating item: ' + response.data);
+                    }
+                },
+                error: function() {
+                    alert('Error updating season item.');
+                },
+                complete: function() {
+                    $('#edit-season-form button[type="submit"]').prop('disabled', false).text('Update');
+                }
+            });
+        });
+        
+        // Handle modal close
+        $('#edit-season-modal .agripump-modal-close, #edit-season-modal .cancel-edit').on('click', function() {
+            $('#edit-season-modal').remove();
+        });
+        
+        // Close modal when clicking outside
+        $('#edit-season-modal').on('click', function(e) {
+            if ($(e.target).is('#edit-season-modal')) {
+                $('#edit-season-modal').remove();
+            }
+        });
+    });
+    
+    // Delete season ledger item
+    $(document).on('click', '.delete-season-item-btn', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var billId = button.data('bill-id');
+        var itemIndex = button.data('item-index');
+        var seasonName = button.data('season-name');
+        
+        if (!confirm('Are you sure you want to delete the season item "' + seasonName + '"? This action cannot be undone.')) {
+            return;
+        }
+        
+        // Show loading
+        button.prop('disabled', true).text('Deleting...');
+        
+        $.ajax({
+            url: agripump_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'agripump_delete_season_ledger',
+                nonce: agripump_ajax.nonce,
+                bill_id: billId,
+                item_index: itemIndex
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert('Season item deleted successfully!');
+                    loadCustomerLedger(); // Reload ledger
+                } else {
+                    alert('Error deleting item: ' + response.data);
+                }
+            },
+            error: function() {
+                alert('Error deleting season item.');
+            },
+            complete: function() {
+                button.prop('disabled', false).text('Delete');
+            }
+        });
     });
 }); 
