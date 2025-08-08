@@ -564,8 +564,11 @@ class AgriPumpLedger {
             }
             
             // Use stored season information (preserves historical data)
-            foreach ($bill_items as &$item) {
+            foreach ($bill_items as $original_index => &$item) {
                 error_log('Processing item: ' . print_r($item, true));
+                
+                // Store the original index from the backend array
+                $item['original_index'] = $original_index;
                 
                 // Use stored season name and price if available (for historical accuracy)
                 if (isset($item['season_name']) && !empty($item['season_name'])) {
