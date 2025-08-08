@@ -497,10 +497,13 @@ jQuery(document).ready(function($) {
                     
                     items.forEach(function(item, itemIndex) {
                         console.log('Processing item:', item);
+                        // Use the original index from backend if available, otherwise fall back to frontend index
+                        var originalIndex = typeof item.original_index !== 'undefined' ? item.original_index : itemIndex;
+                        
                         // Calculate paid amount for this specific item
                         var itemAmount = parseFloat(item.amount || 0);
                         var itemPaidForDisplay = 0;
-                        var itemPaymentKeyForDisplay = item.season_id + '_' + itemIndex;
+                        var itemPaymentKeyForDisplay = item.season_id + '_' + originalIndex;
                         
                         // Check item-specific payments first (new system)
                         if (bill.item_payments && bill.item_payments[itemPaymentKeyForDisplay]) {
@@ -523,12 +526,12 @@ jQuery(document).ready(function($) {
                         
                         // Collect season options for payment dropdown
                         // Make seasonKey unique by including item index to handle multiple items with same season
-                        var seasonKey = item.season_id + '_' + bill.bill_id + '_' + itemIndex;
+                        var seasonKey = item.season_id + '_' + bill.bill_id + '_' + originalIndex;
                         var seasonAmount = parseFloat(item.amount || 0);
                         
                         // Calculate item-specific remaining amount
                         var itemPaid = 0;
-                        var itemPaymentKey = item.season_id + '_' + itemIndex;
+                        var itemPaymentKey = item.season_id + '_' + originalIndex;
                         
                         // Check item-specific payments first (new system)
                         if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
@@ -549,7 +552,7 @@ jQuery(document).ready(function($) {
                                 original_amount: seasonAmount,
                                 remaining_amount: seasonRemaining,
                                 land: item.land || 0,
-                                item_index: itemIndex
+                                item_index: originalIndex
                             };
                         }
                     });
