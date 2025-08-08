@@ -35,6 +35,8 @@ class AgriPumpLedger {
     add_action('wp_ajax_agripump_get_item', array($this, 'get_item'));
     add_action('wp_ajax_agripump_debug_bill', array($this, 'debug_bill'));
     add_action('wp_ajax_agripump_save_payment', array($this, 'save_payment'));
+    add_action('wp_ajax_agripump_edit_season_ledger', array($this, 'edit_season_ledger'));
+    add_action('wp_ajax_agripump_delete_season_ledger', array($this, 'delete_season_ledger'));
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
     }
@@ -795,6 +797,165 @@ class AgriPumpLedger {
         } else {
             wp_send_json_error(__('Error saving payment.', 'agripump-ledger'));
         }
+    }
+    
+    public function edit_season_ledger() {
+        check_ajax_referer('agripump_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have permission to perform this action.', 'agripump-ledger'));
+        }
+        
+        $bill_id = intval($_POST['bill_id']);
+        $item_index = intval($_POST['item_index']);
+        $new_amount = floatval($_POST['new_amount']);
+        $new_land = floatval($_POST['new_land']);
+        $new_season_id = intval($_POST['new_season_id']);
+        $new_season_name = sanitize_text_field($_POST['new_season_name']);
+        
+        if (empty($bill_id) || $item_index < 0 || $new_amount <= 0 || $new_land < 0) {
+            wp_send_json_error(__('Invalid data for editing.', 'agripump-ledger'));
+        }
+        
+        $bill_items = get_post_meta($bill_id, 'bill_items', true);
+        if (!is_array($bill_items) || !isset($bill_items[$item_index])) {
+            wp_send_json_error(__('Item not found in this bill.', 'agripump-ledger'));
+        }
+        
+        $season_item = $bill_items[$item_index];
+        $old_amount = floatval($season_item['amount']);
+        
+        // Check if there are existing payments for this item
+        $item_payments_key = 'item_payments_' . $bill_id;
+        $item_payments = get_post_meta($bill_id, $item_payments_key, true);
+        if (!is_array($item_payments)) {
+            $item_payments = array();
+        }
+        
+        $item_payment_key = $season_item['season_id'] . '_' . $item_index;
+        $existing_payment = isset($item_payments[$item_payment_key]) ? floatval($item_payments[$item_payment_key]) : 0;
+        
+        // Validate that new amount is not less than existing payments
+        if ($new_amount < $existing_payment) {
+            wp_send_json_error(sprintf(__('New amount (%.2f) cannot be less than existing payments (%.2f) for this item.', 'agripump-ledger'), $new_amount, $existing_payment));
+        }
+        
+        // Update amount and land
+        $season_item['amount'] = $new_amount;
+        $season_item['land'] = $new_land;
+        
+        // Update season_id and season_name if provided
+        if ($new_season_id > 0) {
+            $season_item['season_id'] = $new_season_id;
+            $season_item['season_name'] = $new_season_name;
+        }
+        
+        $bill_items[$item_index] = $season_item;
+        update_post_meta($bill_id, 'bill_items', $bill_items);
+        
+        // Recalculate total amount
+        $total_amount = array_sum(array_column($bill_items, 'amount'));
+        update_post_meta($bill_id, 'total_amount', $total_amount);
+        
+        // Update bill's total paid amount
+        $amount_difference = $new_amount - $old_amount;
+        $current_paid_amount = floatval(get_post_meta($bill_id, 'paid_amount', true));
+        // Note: We don't adjust paid_amount here as it's calculated from item_payments
+        
+        wp_send_json_success(array(
+            'message' => __('Season ledger item updated successfully!', 'agripump-ledger'),
+            'total_amount' => $total_amount,
+            'amount_difference' => $amount_difference,
+            'remaining_amount' => $new_amount - $existing_payment
+        ));
+    }
+    
+    public function delete_season_ledger() {
+        check_ajax_referer('agripump_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have permission to perform this action.', 'agripump-ledger'));
+        }
+        
+        $bill_id = intval($_POST['bill_id']);
+        $item_index = intval($_POST['item_index']);
+        
+        if (empty($bill_id) || $item_index < 0) {
+            wp_send_json_error(__('Invalid bill ID or item index.', 'agripump-ledger'));
+        }
+        
+        $bill_items = get_post_meta($bill_id, 'bill_items', true);
+        if (!is_array($bill_items) || !isset($bill_items[$item_index])) {
+            wp_send_json_error(__('Item not found in this bill.', 'agripump-ledger'));
+        }
+        
+        // Get the item to be deleted
+        $item_to_delete = $bill_items[$item_index];
+        
+        // Check if there are existing payments for this item
+        $item_payments_key = 'item_payments_' . $bill_id;
+        $item_payments = get_post_meta($bill_id, $item_payments_key, true);
+        if (!is_array($item_payments)) {
+            $item_payments = array();
+        }
+        
+        $item_payment_key = $item_to_delete['season_id'] . '_' . $item_index;
+        $existing_payment = isset($item_payments[$item_payment_key]) ? floatval($item_payments[$item_payment_key]) : 0;
+        
+        // Prevent deletion if there are payments for this item
+        if ($existing_payment > 0) {
+            wp_send_json_error(sprintf(__('Cannot delete item with existing payments (%.2f). Please adjust or remove payments first.', 'agripump-ledger'), $existing_payment));
+        }
+        
+        // Calculate the amount to be removed from total
+        $amount_to_remove = floatval($item_to_delete['amount']);
+        
+        // Remove the item from the array
+        unset($bill_items[$item_index]);
+        
+        // Re-index the array to maintain proper indexing
+        $bill_items = array_values($bill_items);
+        
+        // Update item_payments to reflect new indices
+        $new_item_payments = array();
+        foreach ($item_payments as $payment_key => $payment_amount) {
+            $key_parts = explode('_', $payment_key);
+            if (count($key_parts) >= 2) {
+                $season_id = $key_parts[0];
+                $old_index = intval($key_parts[1]);
+                
+                // Skip the deleted item's payment
+                if ($old_index == $item_index) {
+                    continue;
+                }
+                
+                // Adjust indices for items after the deleted one
+                $new_index = $old_index > $item_index ? $old_index - 1 : $old_index;
+                $new_payment_key = $season_id . '_' . $new_index;
+                $new_item_payments[$new_payment_key] = $payment_amount;
+            }
+        }
+        
+        // Update the bill_items meta
+        update_post_meta($bill_id, 'bill_items', $bill_items);
+        
+        // Update item payments with new indices
+        update_post_meta($bill_id, $item_payments_key, $new_item_payments);
+        
+        // Recalculate total amount
+        $total_amount = array_sum(array_column($bill_items, 'amount'));
+        update_post_meta($bill_id, 'total_amount', $total_amount);
+        
+        // Recalculate total paid amount
+        $total_paid = array_sum($new_item_payments);
+        update_post_meta($bill_id, 'paid_amount', $total_paid);
+        
+        wp_send_json_success(array(
+            'message' => __('Season ledger item deleted successfully!', 'agripump-ledger'),
+            'total_amount' => $total_amount,
+            'total_paid' => $total_paid,
+            'amount_removed' => $amount_to_remove
+        ));
     }
     
     public function activate() {

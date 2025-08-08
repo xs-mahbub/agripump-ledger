@@ -641,7 +641,7 @@
     border-radius: 8px;
     width: 90%;
     max-width: 800px;
-    max-height: 90vh;
+    max-height: 95vh;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
@@ -778,6 +778,57 @@
     height: 40px;
     animation: spin 1s linear infinite;
     margin: 0 auto 15px;
+}
+
+/* Season Ledger Action Buttons */
+.agripump-ledger-item-label .agripump-btn {
+    margin: 2px;
+    padding: 4px 8px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.edit-season-item-btn {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+.edit-season-item-btn:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+.delete-season-item-btn {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.delete-season-item-btn:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.agripump-ledger-header-cell:last-child {
+    min-width: 120px;
+}
+
+.agripump-ledger-item-label:last-child {
+    min-width: 120px;
+    text-align: center;
+}
+
+/* Edit Season Modal Specific Styles */
+#edit-season-modal .agripump-form-group {
+    margin-bottom: 15px;
+}
+
+#edit-season-modal .agripump-form-actions {
+    margin-top: 20px;
+    text-align: right;
+}
+
+#edit-season-modal .agripump-form-actions .agripump-btn {
+    margin-left: 10px;
 }
 
 /* Print styles */
