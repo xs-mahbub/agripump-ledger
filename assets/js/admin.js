@@ -233,7 +233,14 @@ jQuery(document).ready(function($) {
         var totalPaid = 0;
         if (ledgerData && ledgerData.length > 0) {
             ledgerData.forEach(function(bill) {
-                if (bill.season_payments) {
+                // Use item-specific payments first (new system)
+                if (bill.item_payments) {
+                    Object.values(bill.item_payments).forEach(function(amount) {
+                        totalPaid += parseFloat(amount) || 0;
+                    });
+                }
+                // Fallback to season payments for backward compatibility (old system)
+                else if (bill.season_payments) {
                     Object.values(bill.season_payments).forEach(function(amount) {
                         totalPaid += parseFloat(amount) || 0;
                     });
@@ -372,13 +379,21 @@ jQuery(document).ready(function($) {
             var billRemainingTotal = 0;
             if (bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0) {
                 var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
-                itemsArray.forEach(function(item) {
-                    var seasonPaid = 0;
-                    if (bill.season_payments && bill.season_payments[item.season_id]) {
-                        seasonPaid = parseFloat(bill.season_payments[item.season_id]);
+                itemsArray.forEach(function(item, itemIndex) {
+                    var itemPaid = 0;
+                    var itemPaymentKey = item.season_id + '_' + itemIndex;
+                    
+                    // Check item-specific payments first (new system)
+                    if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
+                        itemPaid = parseFloat(bill.item_payments[itemPaymentKey]);
                     }
-                    var seasonRemaining = parseFloat(item.amount || 0) - seasonPaid;
-                    billRemainingTotal += seasonRemaining;
+                    // Fallback to season payments for backward compatibility (old system)
+                    else if (bill.season_payments && bill.season_payments[item.season_id]) {
+                        itemPaid = parseFloat(bill.season_payments[item.season_id]);
+                    }
+                    
+                    var itemRemaining = parseFloat(item.amount || 0) - itemPaid;
+                    billRemainingTotal += itemRemaining;
                 });
             }
             
@@ -402,23 +417,31 @@ jQuery(document).ready(function($) {
                 // Convert object to array if needed
                 var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
                 
-                itemsArray.forEach(function(item) {
+                itemsArray.forEach(function(item, itemIndex) {
                     console.log('Processing item:', item);
                     
-                    // Calculate season-specific paid amount
-                    var seasonPaid = 0;
-                    if (bill.season_payments && bill.season_payments[item.season_id]) {
-                        seasonPaid = parseFloat(bill.season_payments[item.season_id]);
+                    // Calculate item-specific paid amount
+                    var itemPaid = 0;
+                    var itemPaymentKey = item.season_id + '_' + itemIndex;
+                    
+                    // Check item-specific payments first (new system)
+                    if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
+                        itemPaid = parseFloat(bill.item_payments[itemPaymentKey]);
                     }
-                    var seasonRemaining = parseFloat(item.amount || 0) - seasonPaid;
+                    // Fallback to season payments for backward compatibility (old system)
+                    else if (bill.season_payments && bill.season_payments[item.season_id]) {
+                        itemPaid = parseFloat(bill.season_payments[item.season_id]);
+                    }
+                    
+                    var itemRemaining = parseFloat(item.amount || 0) - itemPaid;
                     
                     ledgerHtml += `
                         <div class="agripump-ledger-item-row">
                             <div class="agripump-ledger-item-label">${item.season_name || 'Unknown Season'}</div>
                             <div class="agripump-ledger-item-label">${item.land || '0'}</div>
                             <div class="agripump-ledger-item-label">${parseFloat(item.amount || 0).toFixed(2)}</div>
-                            <div class="agripump-ledger-item-label">${seasonPaid.toFixed(2)}</div>
-                            <div class="agripump-ledger-item-label">${seasonRemaining.toFixed(2)}</div>
+                            <div class="agripump-ledger-item-label">${itemPaid.toFixed(2)}</div>
+                            <div class="agripump-ledger-item-label">${itemRemaining.toFixed(2)}</div>
                         </div>
                     `;
                 });
