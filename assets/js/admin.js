@@ -380,8 +380,9 @@ jQuery(document).ready(function($) {
             if (bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0) {
                 var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
                 itemsArray.forEach(function(item, itemIndex) {
+                    var originalIndex = (item && typeof item.original_index !== 'undefined') ? item.original_index : itemIndex;
                     var itemPaid = 0;
-                    var itemPaymentKey = item.season_id + '_' + itemIndex;
+                    var itemPaymentKey = item.season_id + '_' + originalIndex;
                     
                     // Check item-specific payments first (new system)
                     if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
@@ -422,8 +423,9 @@ jQuery(document).ready(function($) {
                     console.log('Processing item:', item);
                     
                     // Calculate item-specific paid amount
+                    var originalIndex = (item && typeof item.original_index !== 'undefined') ? item.original_index : itemIndex;
                     var itemPaid = 0;
-                    var itemPaymentKey = item.season_id + '_' + itemIndex;
+                    var itemPaymentKey = item.season_id + '_' + originalIndex;
                     
                     // Check item-specific payments first (new system)
                     if (bill.item_payments && bill.item_payments[itemPaymentKey]) {
@@ -446,14 +448,14 @@ jQuery(document).ready(function($) {
                             <div class="agripump-ledger-item-label">
                                 <button class="edit-season-item-btn agripump-btn agripump-btn-sm agripump-btn-secondary" 
                                         data-bill-id="${bill.bill_id}" 
-                                        data-item-index="${itemIndex}" 
+                                        data-item-index="${originalIndex}" 
                                         data-season-id="${item.season_id}" 
                                         data-season-name="${item.season_name || 'Unknown Season'}" 
                                         data-land="${item.land || '0'}" 
                                         data-amount="${parseFloat(item.amount || 0).toFixed(2)}">Edit</button>
                                 <button class="delete-season-item-btn agripump-btn agripump-btn-sm agripump-btn-danger" 
                                         data-bill-id="${bill.bill_id}" 
-                                        data-item-index="${itemIndex}" 
+                                        data-item-index="${originalIndex}" 
                                         data-season-name="${item.season_name || 'Unknown Season'}">Delete</button>
                             </div>
                         </div>
