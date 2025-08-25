@@ -831,6 +831,74 @@
     margin-left: 10px;
 }
 
+/* Land Input Styles */
+.land-inputs-container,
+.edit-land-inputs-container {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    background-color: #f9f9f9;
+}
+
+.land-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.land-input-row:last-child {
+    margin-bottom: 0;
+}
+
+.land-input-row .agripump-form-control {
+    flex: 1;
+    min-width: 120px;
+}
+
+.land-input-row .agripump-btn {
+    flex-shrink: 0;
+    width: 35px;
+    height: 35px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.add-land-btn,
+.add-edit-land-btn {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.add-land-btn:hover,
+.add-edit-land-btn:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.remove-land-btn,
+.remove-edit-land-btn {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.remove-land-btn:hover,
+.remove-edit-land-btn:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.form-text {
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 5px;
+    display: block;
+}
+
 /* Print styles */
 @media print {
     .agripump-wrap {

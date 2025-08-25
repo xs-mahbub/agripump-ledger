@@ -309,6 +309,30 @@ class AgriPumpLedger {
                 $item['season_name'] = 'Unknown Season';
                 $item['season_price'] = 0;
             }
+            
+            // Handle multiple land amounts
+            if (isset($item['land_amounts']) && is_array($item['land_amounts'])) {
+                // Calculate total land from individual amounts
+                $total_land = 0;
+                $land_amounts = array();
+                
+                foreach ($item['land_amounts'] as $land_amount) {
+                    $land_value = floatval($land_amount);
+                    if ($land_value > 0) {
+                        $total_land += $land_value;
+                        $land_amounts[] = $land_value;
+                    }
+                }
+                
+                // Set the total land and display format
+                $item['land'] = $total_land;
+                $item['land_display'] = implode('+', $land_amounts);
+                $item['land_amounts'] = $land_amounts; // Store individual amounts for reference
+            } else {
+                // Backward compatibility for single land input
+                $item['land'] = floatval($item['land'] ?? 0);
+                $item['land_display'] = $item['land'];
+            }
         }
         
         // Create bill post
@@ -810,6 +834,7 @@ class AgriPumpLedger {
         $item_index = intval($_POST['item_index']);
         $new_amount = floatval($_POST['new_amount']);
         $new_land = floatval($_POST['new_land']);
+        $new_land_display = sanitize_text_field($_POST['new_land_display'] ?? '');
         $new_season_id = intval($_POST['new_season_id']);
         $new_season_name = sanitize_text_field($_POST['new_season_name']);
         
@@ -840,9 +865,10 @@ class AgriPumpLedger {
             wp_send_json_error(sprintf(__('New amount (%.2f) cannot be less than existing payments (%.2f) for this item.', 'agripump-ledger'), $new_amount, $existing_payment));
         }
         
-        // Update amount and land
+        // Update amount, land, and land display
         $season_item['amount'] = $new_amount;
         $season_item['land'] = $new_land;
+        $season_item['land_display'] = $new_land_display;
         
         // Update season_id and season_name if provided
         if ($new_season_id > 0) {

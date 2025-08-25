@@ -163,7 +163,14 @@ jQuery(document).ready(function($) {
                 </div>
                 <div class="agripump-form-group">
                     <label>${agripump_ajax.strings.land || 'Land'}</label>
-                    <input type="number" class="agripump-form-control land-input" name="bill_items[${billItemCount}][land]" step="0.01" required>
+                    <div class="land-inputs-container">
+                        <div class="land-input-row">
+                            <input type="number" class="agripump-form-control land-input" name="bill_items[${billItemCount}][land_amounts][]" step="0.01" placeholder="Land amount" required>
+                            <button type="button" class="add-land-btn agripump-btn agripump-btn-sm agripump-btn-success">+</button>
+                        </div>
+                    </div>
+                    <input type="hidden" class="total-land-input" name="bill_items[${billItemCount}][land]" value="">
+                    <input type="hidden" class="land-display-input" name="bill_items[${billItemCount}][land_display]" value="">
                 </div>
                 <div class="agripump-form-group">
                     <label>${agripump_ajax.strings.amount || 'Amount'}</label>
@@ -195,30 +202,59 @@ jQuery(document).ready(function($) {
     });
     
     $(document).on('change', '.season-select', function() {
-        var item = $(this).closest('.agripump-bill-item');
-        var landInput = item.find('.land-input');
-        var amountInput = item.find('.amount-input');
-        var selectedOption = $(this).find('option:selected');
-        var price = parseFloat(selectedOption.data('price')) || 0;
-        
-        if (landInput.val()) {
-            var land = parseFloat(landInput.val()) || 0;
-            amountInput.val((price * land).toFixed(2));
-            calculateTotal();
-        }
+        updateLandCalculation($(this).closest('.agripump-bill-item'));
     });
     
+    // Add land input button
+    $(document).on('click', '.add-land-btn', function() {
+        var container = $(this).closest('.land-inputs-container');
+        var newRow = `
+            <div class="land-input-row">
+                <input type="number" class="agripump-form-control land-input" name="bill_items[${$(this).closest('.agripump-bill-item').data('item')}][land_amounts][]" step="0.01" placeholder="Land amount" required>
+                <button type="button" class="remove-land-btn agripump-btn agripump-btn-sm agripump-btn-danger">-</button>
+            </div>
+        `;
+        container.append(newRow);
+        updateLandCalculation($(this).closest('.agripump-bill-item'));
+    });
+    
+    // Remove land input button
+    $(document).on('click', '.remove-land-btn', function() {
+        $(this).closest('.land-input-row').remove();
+        updateLandCalculation($(this).closest('.agripump-bill-item'));
+    });
+    
+    // Update land calculation when any land input changes
     $(document).on('input', '.land-input', function() {
-        var item = $(this).closest('.agripump-bill-item');
+        updateLandCalculation($(this).closest('.agripump-bill-item'));
+    });
+    
+    function updateLandCalculation(item) {
+        var totalLand = 0;
+        var landAmounts = [];
+        
+        // Calculate total land and collect individual amounts
+        item.find('.land-input').each(function() {
+            var landValue = parseFloat($(this).val()) || 0;
+            if (landValue > 0) {
+                totalLand += landValue;
+                landAmounts.push(landValue);
+            }
+        });
+        
+        // Update hidden inputs
+        item.find('.total-land-input').val(totalLand);
+        item.find('.land-display-input').val(landAmounts.join('+'));
+        
+        // Update amount calculation
         var seasonSelect = item.find('.season-select');
         var amountInput = item.find('.amount-input');
         var selectedOption = seasonSelect.find('option:selected');
         var price = parseFloat(selectedOption.data('price')) || 0;
-        var land = parseFloat($(this).val()) || 0;
         
-        amountInput.val((price * land).toFixed(2));
+        amountInput.val((price * totalLand).toFixed(2));
         calculateTotal();
-    });
+    }
     
     function calculateTotal() {
         var total = 0;
@@ -305,6 +341,7 @@ jQuery(document).ready(function($) {
                     loadCustomerLedger();
                     form[0].reset();
                     $('.agripump-bill-items').empty();
+                    billItemCount = 0; // Reset the bill item counter
                     $('.agripump-total').text(agripump_ajax.strings.total + ': 0.00');
                 } else {
                     alert(response.data || agripump_ajax.strings.error);
@@ -375,9 +412,12 @@ jQuery(document).ready(function($) {
         ledgerData.forEach(function(bill) {
             console.log('Processing bill:', bill);
             
+            // Check if bill has items before creating the table structure
+            var hasItems = bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0;
+            
             // Calculate the sum of remaining amounts for this bill
             var billRemainingTotal = 0;
-            if (bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0) {
+            if (hasItems) {
                 var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
                 itemsArray.forEach(function(item, itemIndex) {
                     var originalIndex = (item && typeof item.original_index !== 'undefined') ? item.original_index : itemIndex;
@@ -398,24 +438,25 @@ jQuery(document).ready(function($) {
                 });
             }
             
-            ledgerHtml += `
-                <div class="agripump-ledger-item">
-                    <div class="agripump-ledger-header">
-                        <span class="agripump-ledger-date">${bill.date || 'No date'}</span>
-                        <span class="agripump-ledger-total">${agripump_ajax.strings.total || 'Total'}: ${billRemainingTotal.toFixed(2)}</span>
-                    </div>
-                    <div class="agripump-ledger-items">
-                        <div class="agripump-ledger-table-header">
-                            <div class="agripump-ledger-header-cell">${agripump_ajax.strings.season_name || 'Season Name'}</div>
-                            <div class="agripump-ledger-header-cell">${agripump_ajax.strings.land_amount || 'Land Amount'}</div>
-                            <div class="agripump-ledger-header-cell">${agripump_ajax.strings.due_amount || 'Due Amount'}</div>
-                            <div class="agripump-ledger-header-cell">Paid Amount</div>
-                            <div class="agripump-ledger-header-cell">Remaining</div>
-                            <div class="agripump-ledger-header-cell">Actions</div>
+            // Only create the ledger item if there are items to display
+            if (hasItems) {
+                ledgerHtml += `
+                    <div class="agripump-ledger-item">
+                        <div class="agripump-ledger-header">
+                            <span class="agripump-ledger-date">${bill.date || 'No date'}</span>
+                            <span class="agripump-ledger-total">${agripump_ajax.strings.total || 'Total'}: ${billRemainingTotal.toFixed(2)}</span>
                         </div>
-            `;
-            
-            if (bill.items && typeof bill.items === 'object' && Object.keys(bill.items).length > 0) {
+                        <div class="agripump-ledger-items">
+                            <div class="agripump-ledger-table-header">
+                                <div class="agripump-ledger-header-cell">${agripump_ajax.strings.season_name || 'Season Name'}</div>
+                                <div class="agripump-ledger-header-cell">${agripump_ajax.strings.land_amount || 'Land Amount'}</div>
+                                <div class="agripump-ledger-header-cell">${agripump_ajax.strings.due_amount || 'Due Amount'}</div>
+                                <div class="agripump-ledger-header-cell">Paid Amount</div>
+                                <div class="agripump-ledger-header-cell">Remaining</div>
+                                <div class="agripump-ledger-header-cell">Actions</div>
+                            </div>
+                `;
+                
                 // Convert object to array if needed
                 var itemsArray = Array.isArray(bill.items) ? bill.items : Object.values(bill.items);
                 
@@ -438,10 +479,13 @@ jQuery(document).ready(function($) {
                     
                     var itemRemaining = parseFloat(item.amount || 0) - itemPaid;
                     
+                    // Display land amount with plus format if available, otherwise show total land
+                    var landDisplay = item.land_display || item.land || '0';
+                    
                     ledgerHtml += `
                         <div class="agripump-ledger-item-row">
                             <div class="agripump-ledger-item-label">${item.season_name || 'Unknown Season'}</div>
-                            <div class="agripump-ledger-item-label">${item.land || '0'}</div>
+                            <div class="agripump-ledger-item-label">${landDisplay}</div>
                             <div class="agripump-ledger-item-label">${parseFloat(item.amount || 0).toFixed(2)}</div>
                             <div class="agripump-ledger-item-label">${itemPaid.toFixed(2)}</div>
                             <div class="agripump-ledger-item-label">${itemRemaining.toFixed(2)}</div>
@@ -452,6 +496,7 @@ jQuery(document).ready(function($) {
                                         data-season-id="${item.season_id}" 
                                         data-season-name="${item.season_name || 'Unknown Season'}" 
                                         data-land="${item.land || '0'}" 
+                                        data-land-display="${landDisplay}"
                                         data-amount="${parseFloat(item.amount || 0).toFixed(2)}">Edit</button>
                                 <button class="delete-season-item-btn agripump-btn agripump-btn-sm agripump-btn-danger" 
                                         data-bill-id="${bill.bill_id}" 
@@ -461,21 +506,15 @@ jQuery(document).ready(function($) {
                         </div>
                     `;
                 });
-            } else {
-                console.log('No items found for bill:', bill);
+                
                 ledgerHtml += `
-                    <div class="agripump-ledger-item-row">
-                        <div class="agripump-ledger-item-label">No items found</div>
-                        <div class="agripump-ledger-item-label">-</div>
-                        <div class="agripump-ledger-item-label">-</div>
+                        </div>
                     </div>
                 `;
+            } else {
+                console.log('No items found for bill:', bill);
+                // Don't create any table structure for bills with no items
             }
-            
-            ledgerHtml += `
-                    </div>
-                </div>
-            `;
         });
         
         $('.agripump-ledger').html(ledgerHtml);
@@ -616,7 +655,40 @@ jQuery(document).ready(function($) {
         var seasonId = button.data('season-id');
         var seasonName = button.data('season-name');
         var land = button.data('land');
+        var landDisplay = button.data('land-display') || land;
         var amount = button.data('amount');
+        
+        // Parse land amounts from display format (e.g., "45+20+10" -> [45, 20, 10])
+        var landAmounts = landDisplay.split('+').map(function(val) {
+            return parseFloat(val.trim()) || 0;
+        }).filter(function(val) {
+            return val > 0;
+        });
+        
+        // If no land amounts found, use the total land as single amount
+        if (landAmounts.length === 0) {
+            landAmounts = [parseFloat(land) || 0];
+        }
+        
+        // Create land input fields HTML
+        var landInputsHtml = '';
+        landAmounts.forEach(function(landAmount, index) {
+            if (index === 0) {
+                landInputsHtml += `
+                    <div class="land-input-row">
+                        <input type="number" class="agripump-form-control edit-land-input" step="0.01" min="0" value="${landAmount}" required>
+                        <button type="button" class="add-edit-land-btn agripump-btn agripump-btn-sm agripump-btn-success">+</button>
+                    </div>
+                `;
+            } else {
+                landInputsHtml += `
+                    <div class="land-input-row">
+                        <input type="number" class="agripump-form-control edit-land-input" step="0.01" min="0" value="${landAmount}" required>
+                        <button type="button" class="remove-edit-land-btn agripump-btn agripump-btn-sm agripump-btn-danger">-</button>
+                    </div>
+                `;
+            }
+        });
         
         // Create edit modal
         var modalHtml = `
@@ -633,8 +705,11 @@ jQuery(document).ready(function($) {
                                 <input type="text" id="edit-season-name" class="agripump-form-control" value="${seasonName}" readonly>
                             </div>
                             <div class="agripump-form-group">
-                                <label for="edit-land-amount">Land Amount *</label>
-                                <input type="number" id="edit-land-amount" class="agripump-form-control" step="0.01" min="0" value="${land}" required>
+                                <label>Land Amounts *</label>
+                                <div class="edit-land-inputs-container">
+                                    ${landInputsHtml}
+                                </div>
+                                <small class="form-text">Add multiple land parcels using the + button</small>
                             </div>
                             <div class="agripump-form-group">
                                 <label for="edit-due-amount">Due Amount *</label>
@@ -657,13 +732,41 @@ jQuery(document).ready(function($) {
         $('body').append(modalHtml);
         $('#edit-season-modal').show();
         
+        // Add land input button for edit modal
+        $(document).on('click', '.add-edit-land-btn', function() {
+            var container = $(this).closest('.edit-land-inputs-container');
+            var newRow = `
+                <div class="land-input-row">
+                    <input type="number" class="agripump-form-control edit-land-input" step="0.01" min="0" required>
+                    <button type="button" class="remove-edit-land-btn agripump-btn agripump-btn-sm agripump-btn-danger">-</button>
+                </div>
+            `;
+            container.append(newRow);
+        });
+        
+        // Remove land input button for edit modal
+        $(document).on('click', '.remove-edit-land-btn', function() {
+            $(this).closest('.land-input-row').remove();
+        });
+        
         // Handle form submission
         $('#edit-season-form').on('submit', function(e) {
             e.preventDefault();
-            var newLand = parseFloat($('#edit-land-amount').val()) || 0;
+            
+            // Calculate total land and collect individual amounts
+            var totalLand = 0;
+            var landAmounts = [];
+            $('#edit-season-modal .edit-land-input').each(function() {
+                var landValue = parseFloat($(this).val()) || 0;
+                if (landValue > 0) {
+                    totalLand += landValue;
+                    landAmounts.push(landValue);
+                }
+            });
+            
             var newAmount = parseFloat($('#edit-due-amount').val()) || 0;
             
-            if (newLand < 0 || newAmount <= 0) {
+            if (totalLand <= 0 || newAmount <= 0) {
                 alert('Please enter valid values for land and due amount.');
                 return;
             }
@@ -680,7 +783,8 @@ jQuery(document).ready(function($) {
                     bill_id: billId,
                     item_index: itemIndex,
                     new_amount: newAmount,
-                    new_land: newLand,
+                    new_land: totalLand,
+                    new_land_display: landAmounts.join('+'),
                     new_season_id: seasonId,
                     new_season_name: seasonName
                 },
