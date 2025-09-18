@@ -284,6 +284,21 @@ if (isset($_GET['customer_id'])) {
     <!-- Bill Management for Specific Customer -->
     <?php
     // Calculate total due for this customer
+    // Prepare previous/next navigation for customers
+    $prev_customer = null;
+    $next_customer = null;
+    if ($bill_customer) {
+        global $post;
+        $original_post = $post;
+        $post = $bill_customer;
+        setup_postdata($post);
+        // Previous/Next by publish date within same post type
+        $prev_customer = get_adjacent_post(false, '', true);
+        $next_customer = get_adjacent_post(false, '', false);
+        wp_reset_postdata();
+        $post = $original_post;
+    }
+
     $customer_bills = get_posts(array(
         'post_type' => 'agripump_bill',
         'meta_query' => array(
@@ -315,9 +330,17 @@ if (isset($_GET['customer_id'])) {
                 <div style="border: 2px solid #dc3545; padding: 10px 15px; border-radius: 5px; background: #fff5f5;">
                     <strong style="color: #dc3545;"><?php _e('Total Due:', 'agripump-ledger'); ?> <?php echo number_format($total_remaining, 2); ?></strong>
                 </div>
-                <a href="<?php echo admin_url('admin.php?page=agripump-customers'); ?>" class="agripump-btn agripump-btn-secondary">
-                    <?php _e('Back to Customers', 'agripump-ledger'); ?>
+                <?php if ($prev_customer): ?>
+                <a href="<?php echo admin_url('admin.php?page=agripump-customers&customer_id=' . $prev_customer->ID); ?>" class="agripump-btn agripump-btn-secondary" title="<?php echo esc_attr(sprintf(__('Previous: %s', 'agripump-ledger'), $prev_customer->post_title)); ?>">
+                    <?php _e('← Prev', 'agripump-ledger'); ?>
                 </a>
+                <?php endif; ?>
+                <?php if ($next_customer): ?>
+                <a href="<?php echo admin_url('admin.php?page=agripump-customers&customer_id=' . $next_customer->ID); ?>" class="agripump-btn agripump-btn-secondary" title="<?php echo esc_attr(sprintf(__('Next: %s', 'agripump-ledger'), $next_customer->post_title)); ?>">
+                    <?php _e('Next →', 'agripump-ledger'); ?>
+                </a>
+                <?php endif; ?>
+                
             </div>
         </div>
         <div class="agripump-card-body">
